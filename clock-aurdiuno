@@ -1,0 +1,174 @@
+const byte segPins[7] = {2,3,4,5,6,7,8};
+const byte digitPins[4] = {9,10,11,12};
+
+const byte hourBtn   = A0;
+const byte minuteBtn = A1;
+const byte startBtn  = A2;
+
+byte digits[10][7] =
+{
+ {0,0,0,0,0,0,1}, //0
+ {1,0,0,1,1,1,1}, //1
+ {0,0,1,0,0,1,0}, //2
+ {0,0,0,0,1,1,0}, //3
+ {1,0,0,1,1,0,0}, //4
+ {0,1,0,0,1,0,0}, //5
+ {0,1,0,0,0,0,0}, //6
+ {0,0,0,1,1,1,1}, //7
+ {0,0,0,0,0,0,0}, //8
+ {0,0,0,0,1,0,0}  //9
+};
+
+int hours = 0;
+int minutes = 0;
+int secondsCounter = 0;
+
+bool running = false;
+
+unsigned long previousMillis = 0;
+
+bool showSeconds = false;
+unsigned long showSecondsStart = 0;
+
+unsigned long buttonPressTime = 0;
+bool buttonPreviouslyPressed = false;
+
+void setup()
+{
+  for(int i=0;i<7;i++)
+    pinMode(segPins[i],OUTPUT);
+
+  for(int i=0;i<4;i++)
+    pinMode(digitPins[i],OUTPUT);
+
+  pinMode(hourBtn,INPUT_PULLUP);
+  pinMode(minuteBtn,INPUT_PULLUP);
+  pinMode(startBtn,INPUT_PULLUP);
+}
+
+void loop()
+{
+  // TIME SETTING MODE
+  if(!running)
+  {
+    if(digitalRead(hourBtn)==LOW)
+    {
+      hours=(hours+1)%24;
+      delay(200);
+    }
+
+    if(digitalRead(minuteBtn)==LOW)
+    {
+      minutes=(minutes+1)%60;
+      delay(200);
+    }
+
+    if(digitalRead(startBtn)==LOW)
+    {
+      running=true;
+      previousMillis=millis();
+      delay(300);
+    }
+  }
+
+  // CLOCK RUNNING
+  if(running)
+  {
+    if(millis()-previousMillis>=1000)
+    {
+      previousMillis+=1000;
+
+      secondsCounter++;
+
+      if(secondsCounter>=60)
+      {
+        secondsCounter=0;
+        minutes++;
+
+        if(minutes>=60)
+        {
+          minutes=0;
+          hours++;
+        }
+
+        if(hours>=24)
+        {
+          hours=0;
+        }
+      }
+    }
+
+    // LONG PRESS DETECTION
+    if(digitalRead(startBtn)==LOW)
+    {
+      if(!buttonPreviouslyPressed)
+      {
+        buttonPressTime=millis();
+        buttonPreviouslyPressed=true;
+      }
+
+      if(millis()-buttonPressTime>1500)
+      {
+        showSeconds=true;
+        showSecondsStart=millis();
+      }
+    }
+    else
+    {
+      buttonPreviouslyPressed=false;
+    }
+
+    // RETURN TO NORMAL AFTER 3 SECONDS
+    if(showSeconds)
+    {
+      if(millis()-showSecondsStart>3000)
+      {
+        showSeconds=false;
+      }
+    }
+  }
+
+  displayNumber();
+}
+
+void displayDigit(byte digit)
+{
+  for(int s=0;s<7;s++)
+  {
+    digitalWrite(segPins[s],digits[digit][s]);
+  }
+}
+
+void displayNumber()
+{
+  int values[4];
+
+  if(showSeconds)
+  {
+    values[0]=minutes/10;
+    values[1]=minutes%10;
+    values[2]=secondsCounter/10;
+    values[3]=secondsCounter%10;
+  }
+  else
+  {
+    values[0]=hours/10;
+    values[1]=hours%10;
+    values[2]=minutes/10;
+    values[3]=minutes%10;
+  }
+
+  for(int d=0;d<4;d++)
+  {
+    for(int i=0;i<4;i++)
+    {
+      digitalWrite(digitPins[i],LOW);
+    }
+
+    displayDigit(values[d]);
+
+    digitalWrite(digitPins[d],HIGH);
+
+    delay(3);
+  }
+}
