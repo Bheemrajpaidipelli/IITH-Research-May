@@ -1,0 +1,164 @@
+const byte segmentPins[] = {2,3,4,5,6,7,8};
+const byte displayPins[] = {9,10,11,12};
+
+const byte btnHour   = A0;
+const byte btnMinute = A1;
+const byte btnStart  = A2;
+
+const byte segmentMap[10][7] =
+{
+  {0,0,0,0,0,0,1},
+  {1,0,0,1,1,1,1},
+  {0,0,1,0,0,1,0},
+  {0,0,0,0,1,1,0},
+  {1,0,0,1,1,0,0},
+  {0,1,0,0,1,0,0},
+  {0,1,0,0,0,0,0},
+  {0,0,0,1,1,1,1},
+  {0,0,0,0,0,0,0},
+  {0,0,0,0,1,0,0}
+};
+
+byte hr = 0;
+byte min = 0;
+byte sec = 0;
+
+bool clockStarted = false;
+bool secondView = false;
+
+unsigned long timerTick = 0;
+unsigned long holdStart = 0;
+unsigned long secondViewTime = 0;
+
+bool holdDetected = false;
+
+bool oldHour = HIGH;
+bool oldMinute = HIGH;
+bool oldStart = HIGH;
+
+void setup()
+{
+  for(byte i=0;i<7;i++)
+    pinMode(segmentPins[i], OUTPUT);
+
+  for(byte i=0;i<4;i++)
+    pinMode(displayPins[i], OUTPUT);
+
+  pinMode(btnHour, INPUT_PULLUP);
+  pinMode(btnMinute, INPUT_PULLUP);
+  pinMode(btnStart, INPUT_PULLUP);
+}
+
+void loop()
+{
+  bool hourNow = digitalRead(btnHour);
+  bool minuteNow = digitalRead(btnMinute);
+  bool startNow = digitalRead(btnStart);
+
+  if(clockStarted == false)
+  {
+    if(oldHour && !hourNow)
+      hr = (hr + 1) % 24;
+
+    if(oldMinute && !minuteNow)
+      min = (min + 1) % 60;
+
+    if(oldStart && !startNow)
+    {
+      clockStarted = true;
+      timerTick = millis();
+    }
+  }
+
+  oldHour = hourNow;
+  oldMinute = minuteNow;
+  oldStart = startNow;
+
+  if(clockStarted)
+  {
+    while(millis() - timerTick >= 1000)
+    {
+      timerTick += 1000;
+
+      sec++;
+
+      if(sec == 60)
+      {
+        sec = 0;
+        min++;
+
+        if(min == 60)
+        {
+          min = 0;
+          hr = (hr + 1) % 24;
+        }
+      }
+    }
+
+    if(startNow == LOW)
+    {
+      if(!holdDetected)
+      {
+        holdDetected = true;
+        holdStart = millis();
+      }
+
+      if((millis() - holdStart) >= 1500)
+      {
+        secondView = true;
+        secondViewTime = millis();
+      }
+    }
+    else
+    {
+      holdDetected = false;
+    }
+
+    if(secondView && (millis() - secondViewTime >= 5000))
+    {
+      secondView = false;
+    }
+  }
+
+  refreshDisplay();
+}
+
+void sendDigit(byte value)
+{
+  for(byte i=0;i<7;i++)
+  {
+    digitalWrite(segmentPins[i], segmentMap[value][i]);
+  }
+}
+
+void refreshDisplay()
+{
+  byte displayData[4];
+
+  if(secondView)
+  {
+    displayData[0] = min / 10;
+    displayData[1] = min % 10;
+    displayData[2] = sec / 10;
+    displayData[3] = sec % 10;
+  }
+  else
+  {
+    displayData[0] = hr / 10;
+    displayData[1] = hr % 10;
+    displayData[2] = min / 10;
+    displayData[3] = min % 10;
+  }
+
+  for(byte currentDigit=0; currentDigit<4; currentDigit++)
+  {
+    for(byte i=0;i<4;i++)
+      digitalWrite(displayPins[i], LOW);
+
+    sendDigit(displayData[currentDigit]);
+
+    digitalWrite(displayPins[currentDigit], HIGH);
+
+    delay(3);
+  }
+}
