@@ -1,0 +1,155 @@
+#include <LiquidCrystal.h>
+#include <Keypad.h>
+#include <math.h>
+
+// 1. Initialize LCD based on your exact pin mapping
+LiquidCrystal lcd(2, 3, 4, 5, 6, 7);
+
+// 2. Initialize 5x5 Keypad based on your exact pin mapping
+const byte ROWS = 5;
+const byte COLS = 5;
+
+char keys[ROWS][COLS] = {
+  {'7', '8', '9', '/', 'C'},
+  {'4', '5', '6', '*', 'S'},
+  {'1', '2', '3', '-', 'O'},
+  {'.', '0', '=', '+', 'T'},
+  {'^', 'R', 'L', 'N', 'A'} 
+};
+
+byte rowPins[ROWS] = {8, 9, 10, 11, 12};
+byte colPins[COLS] = {A0, A1, A2, A3, A4};
+
+Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
+
+// 3. Calculator State Variables
+String currentInput = "";
+float firstOperand = 0.0;
+char currentOperation = 0;
+boolean isNewInput = true;
+
+void setup() {
+  lcd.begin(16, 2); // Assuming a standard 16x2 LCD
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Ready...");
+  delay(1000);
+  lcd.clear();
+}
+
+void loop() {
+  char key = keypad.getKey();
+
+  if (key) {
+    processKey(key);
+  }
+}
+
+void processKey(char key) {
+  // Handle numbers and decimal point
+  if ((key >= '0' && key <= '9') || key == '.') {
+    if (isNewInput) {
+      currentInput = "";
+      isNewInput = false;
+      lcd.clear();
+    }
+    // Prevent multiple decimals
+    if (key == '.' && currentInput.indexOf('.') != -1) return;
+    
+    currentInput += key;
+    updateDisplay(currentInput);
+  }
+  
+  // Handle All Clear
+  else if (key == 'A') {
+    currentInput = "";
+    firstOperand = 0.0;
+    currentOperation = 0;
+    isNewInput = true;
+    lcd.clear();
+  }
+  
+  // Handle Clear Entry (current line only)
+  else if (key == 'C') {
+    currentInput = "";
+    updateDisplay("0");
+  }
+
+  // Handle Binary Operations (+, -, *, /, ^)
+  else if (key == '+' || key == '-' || key == '*' || key == '/' || key == '^') {
+    if (currentInput != "") {
+      firstOperand = currentInput.toFloat();
+    }
+    currentOperation = key;
+    isNewInput = true;
+    
+    lcd.setCursor(0, 0);
+    lcd.print(firstOperand);
+    lcd.print(" ");
+    lcd.print(currentOperation);
+    lcd.print("      "); // Overwrite old characters
+  }
+
+  // Handle Unary Operations (Calculates immediately)
+  else if (key == 'S' || key == 'O' || key == 'T' || key == 'R' || key == 'L' || key == 'N') {
+    float val = currentInput != "" ? currentInput.toFloat() : firstOperand;
+    float result = 0.0;
+    
+    // Note: Arduino trig functions expect radians. Converting input to radians assuming degrees.
+    if (key == 'S') result = sin(val * PI / 180.0);
+    else if (key == 'O') result = cos(val * PI / 180.0);
+    else if (key == 'T') result = tan(val * PI / 180.0);
+    else if (key == 'R') result = (val >= 0) ? sqrt(val) : 0; // Prevent imaginary numbers crashing
+    else if (key == 'L') result = (val > 0) ? log10(val) : 0; // Prevent log(<=0)
+    else if (key == 'N') result = (val > 0) ? log(val) : 0;   // Nat log
+
+    displayResult(result);
+  }
+
+  // Handle Equals
+  else if (key == '=') {
+    if (currentOperation != 0 && currentInput != "") {
+      float secondOperand = currentInput.toFloat();
+      float result = 0.0;
+
+      switch (currentOperation) {
+        case '+': result = firstOperand + secondOperand; break;
+        case '-': result = firstOperand - secondOperand; break;
+        case '*': result = firstOperand * secondOperand; break;
+        case '/': 
+          if (secondOperand == 0) {
+            lcd.clear();
+            lcd.print("Err: Div/0");
+            isNewInput = true;
+            return;
+          }
+          result = firstOperand / secondOperand; 
+          break;
+        case '^': result = pow(firstOperand, secondOperand); break;
+      }
+      
+      displayResult(result);
+      currentOperation = 0; // Reset operation
+    }
+  }
+}
+
+void updateDisplay(String text) {
+  lcd.setCursor(0, 1);
+  lcd.print("                "); // Clear bottom row
+  lcd.setCursor(0, 1);
+  lcd.print(text);
+}
+
+void displayResult(float result) {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Ans:");
+  
+  lcd.setCursor(0, 1);
+  // Convert to string to easily pass to currentInput for chained calculations
+  currentInput = String(result, 4); // 4 decimal places
+  lcd.print(currentInput);
+  isNewInput = true;
+  firstOperand = result; 
+}
